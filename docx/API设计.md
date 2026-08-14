@@ -707,7 +707,29 @@ data: {"task_id":"uuid","counts":{"total":3,"processing":1,"preview_ready":1,"fa
 - HTML 预览使用严格内容安全策略，并与主站执行上下文隔离。
 - API 日志不记录上传内容、验证码、会话令牌和服务器绝对路径。
 
-## 16. 待确认事项
+## 16. 服务健康检查 API
+
+### 16.1 进程存活检查
+
+```http
+GET /api/v1/health
+```
+
+该接口不需要登录，仅用于容器和反向代理判断 HTTP 进程是否存活。
+
+响应：`200 OK`
+
+```json
+{
+  "service": "docshift-server",
+  "status": "ok",
+  "version": "0.1.0"
+}
+```
+
+该接口不检查数据库、文件目录或转换 Worker；依赖就绪检查将在对应模块接入后单独设计。
+
+## 17. 待确认事项
 
 1. 注册后的登录方式及 `POST /auth/login` 的最终请求结构。
 2. 注册成功后是否自动创建登录会话。

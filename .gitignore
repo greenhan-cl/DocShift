@@ -1,0 +1,9 @@
+/data/
+/server/build/
+/server/out/
+/server/CMakeUserPresets.json
+
+*.user
+*.suo
+*.VC.db
+
