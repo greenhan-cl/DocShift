@@ -2,8 +2,10 @@
 /server/build/
 /server/out/
 /server/CMakeUserPresets.json
+/web/node_modules/
+/web/dist/
+/web/.vite/
 
 *.user
 *.suo
 *.VC.db
-
