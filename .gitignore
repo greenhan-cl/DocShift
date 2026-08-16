@@ -5,6 +5,7 @@
 /web/node_modules/
 /web/dist/
 /web/.vite/
+__pycache__/
 
 *.user
 *.suo
