@@ -1,10 +1,13 @@
 /data/
 /server/build/
 /server/out/
+/server/.vs/
 /server/CMakeUserPresets.json
 /web/node_modules/
 /web/dist/
 /web/.vite/
+/web/*.tsbuildinfo
+/tools/python311/
 __pycache__/
 
 *.user

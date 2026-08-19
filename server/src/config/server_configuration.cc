@@ -1,37 +1,35 @@
-#include <docshift/server/core/server_configuration.hxx>
+#include <config/server_configuration.hxx>
 
-#include <charconv>
+#include <cerrno>
 #include <cstdlib>
 #include <limits>
-#include <optional>
 #include <stdexcept>
 #include <string>
-#include <system_error>
 #include <thread>
 
-namespace docshift::server::core {
+namespace docshift {
+namespace config {
 namespace {
 
-std::optional<std::string> readEnvironment(const char* name) {
+bool readEnvironment(const char* name, std::string* value) {
     const char* _value = std::getenv(name);
     if (_value == nullptr || _value[0] == '\0') {
-        return std::nullopt;
+        return false;
     }
 
-    return std::string(_value);
+    *value = _value;
+    return true;
 }
 
 std::uint64_t parseUnsigned(const std::string& value, const char* name) {
-    std::uint64_t _parsed_value = 0;
-    const char* _begin = value.data();
-    const char* _end = value.data() + value.size();
-    const auto _result = std::from_chars(_begin, _end, _parsed_value);
-
-    if (_result.ec != std::errc() || _result.ptr != _end) {
+    errno = 0;
+    char* _end = nullptr;
+    const unsigned long long _parsed_value = std::strtoull(value.c_str(), &_end, 10);
+    if (errno == ERANGE || _end == value.c_str() || *_end != '\0') {
         throw std::invalid_argument(std::string(name) + " must be an unsigned integer");
     }
 
-    return _parsed_value;
+    return static_cast<std::uint64_t>(_parsed_value);
 }
 
 std::uint16_t parsePort(const std::string& value) {
@@ -67,33 +65,56 @@ ServerConfiguration::ServerConfiguration(
     const std::string& listen_address,
     const std::uint16_t listen_port,
     const std::size_t thread_count,
-    const std::filesystem::path& data_root
+    const std::string& data_root,
+    const std::uint64_t upload_max_bytes
 )
     : m_listen_address(listen_address),
       m_listen_port(listen_port),
       m_thread_count(thread_count),
-      m_data_root(data_root) {
+      m_data_root(data_root),
+      m_upload_max_bytes(upload_max_bytes) {
 }
 
 ServerConfiguration ServerConfiguration::fromEnvironment() {
-    std::string _listen_address = readEnvironment("DOCSHIFT_SERVER_ADDRESS").value_or("0.0.0.0");
+    std::string _listen_address = "0.0.0.0";
     std::uint16_t _listen_port = 8080;
     std::size_t _thread_count = defaultThreadCount();
-    std::filesystem::path _data_root = readEnvironment("DOCSHIFT_DATA_ROOT").value_or("./data");
+    std::string _data_root = "./data";
+    std::uint64_t _upload_max_bytes = 50ULL * 1024ULL * 1024ULL;
+    std::string _environment_value;
 
-    if (const auto _port_value = readEnvironment("DOCSHIFT_SERVER_PORT")) {
-        _listen_port = parsePort(*_port_value);
+    if (readEnvironment("DOCSHIFT_SERVER_ADDRESS", &_environment_value)) {
+        _listen_address = _environment_value;
     }
-
-    if (const auto _thread_value = readEnvironment("DOCSHIFT_SERVER_THREADS")) {
-        _thread_count = parseThreadCount(*_thread_value);
+    if (readEnvironment("DOCSHIFT_DATA_ROOT", &_environment_value)) {
+        _data_root = _environment_value;
+    }
+    if (readEnvironment("DOCSHIFT_SERVER_PORT", &_environment_value)) {
+        _listen_port = parsePort(_environment_value);
+    }
+    if (readEnvironment("DOCSHIFT_SERVER_THREADS", &_environment_value)) {
+        _thread_count = parseThreadCount(_environment_value);
+    }
+    if (readEnvironment("DOCSHIFT_UPLOAD_MAX_BYTES", &_environment_value)) {
+        _upload_max_bytes = parseUnsigned(_environment_value, "DOCSHIFT_UPLOAD_MAX_BYTES");
+        if (_upload_max_bytes == 0) {
+            throw std::out_of_range("DOCSHIFT_UPLOAD_MAX_BYTES must be greater than zero");
+        }
+    }
+    const std::uint64_t _multipart_overhead_bytes = 1024ULL * 1024ULL;
+    const std::uint64_t _max_payload_bytes = static_cast<std::uint64_t>(
+        std::numeric_limits<std::size_t>::max()
+    );
+    if (_upload_max_bytes > _max_payload_bytes - _multipart_overhead_bytes) {
+        throw std::out_of_range("DOCSHIFT_UPLOAD_MAX_BYTES is too large");
     }
 
     return ServerConfiguration(
         _listen_address,
         _listen_port,
         _thread_count,
-        _data_root
+        _data_root,
+        _upload_max_bytes
     );
 }
 
@@ -109,8 +130,13 @@ std::size_t ServerConfiguration::threadCount() const noexcept {
     return m_thread_count;
 }
 
-const std::filesystem::path& ServerConfiguration::dataRoot() const noexcept {
+const std::string& ServerConfiguration::dataRoot() const noexcept {
     return m_data_root;
 }
 
-} // namespace docshift::server::core
+std::uint64_t ServerConfiguration::uploadMaxBytes() const noexcept {
+    return m_upload_max_bytes;
+}
+
+} // namespace config
+} // namespace docshift
